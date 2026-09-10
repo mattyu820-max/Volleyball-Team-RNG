@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Volleyball Rolling RNG</title>
+<style>
+:root{--bg:#0b1020;--panel:#151c33;--panel2:#1c2645;--text:#f4f7ff;--muted:#aab5d6;--accent:#64b5ff;--good:#65e69a;--bad:#ff7585;--gold:#ffd166}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:linear-gradient(135deg,#090d19,#111a35);color:var(--text)}
+.wrap{max-width:1200px;margin:auto;padding:24px}.hero{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}
+h1{margin:0;font-size:clamp(28px,4vw,46px)}h2{margin:0 0 10px}.sub{color:var(--muted);margin-top:6px}
+.grid{display:grid;grid-template-columns:1fr 1.35fr;gap:18px}.card{background:rgba(21,28,51,.94);border:1px solid #2a3558;border-radius:18px;padding:18px;box-shadow:0 12px 40px #0004}
+label{display:block;color:var(--muted);font-size:13px;margin:10px 0 5px}input,select{width:100%;background:#0c1327;color:var(--text);border:1px solid #344163;border-radius:10px;padding:10px}
+button{border:0;border-radius:11px;padding:11px 15px;font-weight:800;cursor:pointer;color:#07101d;background:var(--accent);margin:5px 4px 0 0}
+button.secondary{background:#303b60;color:white}button.danger{background:var(--bad)}button:disabled{opacity:.45;cursor:not-allowed}
+.team-row{display:flex;gap:10px;align-items:center;background:var(--panel2);padding:10px;border-radius:12px;margin:7px 0}.slot{width:30px;text-align:center;color:var(--muted);font-weight:800}
+.name{flex:1}.ovr{font-weight:900;color:var(--gold)}.tiny{font-size:12px;color:var(--muted)}
+.rollbox{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.rollbox>div{flex:1;min-width:140px}
+.current{font-size:25px;font-weight:900;margin:15px 0 5px}.result{padding:14px;border-radius:13px;background:#0c1327;border:1px solid #334064;min-height:80px}
+.log{max-height:330px;overflow:auto}.logline{padding:9px 4px;border-bottom:1px solid #29334f;font-size:13px}
+.win{color:var(--good)}.loss{color:var(--bad)}.draw{color:var(--gold)}
+.progress{height:10px;background:#0a1020;border-radius:99px;overflow:hidden;margin:8px 0 15px}.bar{height:100%;background:var(--accent);width:0%;transition:.3s}
+.footer{color:var(--muted);font-size:12px;margin-top:14px}
+@media(max-width:850px){.grid{grid-template-columns:1fr}.hero{display:block}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div><h1>🏐 Volleyball Rolling RNG</h1><div class="sub">Build a 6-player squad, roll from the full 34-player pool, then run the gauntlet.</div></div>
+    <button class="secondary" onclick="resetGame()">Reset Game</button>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Your 6-Player Team</h2>
+      <div class="sub">Pick manually or roll 6 unique players from the entire pool.</div>
+      <button onclick="rollTeam()">🎲 Roll 6 Players</button>
+      <button class="secondary" onclick="clearTeam()">Clear</button>
+      <div id="team"></div>
+      <div class="current" id="teamOvr">Team OVR: —</div>
+      <div class="tiny">Team OVR is the average of the six players.</div>
+    </section>
+
+    <section class="card">
+      <h2>Match Gauntlet</h2>
+      <div class="sub">Teams are faced in the exact order you requested.</div>
+      <div id="opponent"></div>
+      <div class="progress"><div class="bar" id="bar"></div></div>
+      <button id="fight" onclick="playMatch()">⚔️ Play Match</button>
+      <button class="secondary" onclick="autoRun()">▶ Run Remaining</button>
+      <div class="result" id="result">Roll your team to begin.</div>
+      <div class="log" id="log"></div>
+    </section>
+
+    <section class="card" style="grid-column:1/-1">
+      <h2>All 34 Players — Rolling Pool</h2>
+      <div class="sub">Every player below can appear in your randomly rolled team. Duplicate names are kept separate when their versions differ.</div>
+      <div id="pool"></div>
+    </section>
+  </div>
+  <div class="footer">RNG is seeded randomly each page load. Match odds use team OVR plus a small variance factor, so higher OVR helps but does not guarantee a win.</div>
+</div>
+
+<script>
+const pool = [
+["Xavier",94],["Matthew Yu",94],["Sean (park)",92],["Alan",91],["Jason (Freshman)",90],["Aethan",89],["Marissa",89],["Riley",89],["Jason (Senior)",88],["Peter",87],["Grace",86],["Gavin",85],["Brian",84],["Jah",78],["Mew",68],
+["Logan Flores",99],["MK3",96],["Saugat",95],["Ryan",95],["Jaiden",93],["Clayton",93],
+["Indian",92],["Dude with Gloves",86],["Mr. Over the Line",84],["Magnolia Dude",83],["Other Young Jit",82],["Group Leader",76],
+["Seth Sainz",99],["Logan Benda",95],["Karl",94],["Kaiden ('25)",94],["Sean (VAR)",89],["Mike ('25)",82],
+["Mike ('26)",96],["Kaiden ('26)",94],["Matthew (VAR)",94],["Mchael",92],["Kai",90],["Jaden",89]
+];
+
+const opponents = [
+{name:"Mexicans & 1 Indian",players:[["Indian",92],["Dude with Gloves",86],["Mr. Over the Line",84],["Magnolia Dude",83],["Other Young Jit",82],["Group Leader",76]]},
+{name:"VDFA",players:[["Xavier",94],["Matthew Yu",94],["Alan",91],["Marissa",89],["Riley",89],["Sean (park)",92]]},
+{name:"Var '25",players:[["Seth Sainz",99],["Logan Benda",95],["Karl",94],["Kaiden ('25)",94],["Sean (VAR)",89],["Mike ('25)",82]]},
+{name:"Var '26",players:[["Mike ('26)",96],["Kaiden ('26)",94],["Matthew (VAR)",94],["Mchael",92],["Kai",90],["Jaden",89]]},
+{name:"🏆 Cypress",players:[["Logan Flores",99],["MK3",96],["Saugat",95],["Ryan",95],["Jaiden",93],["Clayton",93]]}
+];
+
+let team=[], round=0, locked=false;
+const $=id=>document.getElementById(id);
+const avg=a=>a.length?a.reduce((s,p)=>s+p[1],0)/a.length:0;
+const fmt=n=>Number.isInteger(n)?n:n.toFixed(1);
+
+function renderPool(){
+  $("pool").innerHTML=pool.map((p,i)=>`<div class="team-row"><div class="slot">${i+1}</div><div class="name">${p[0]}</div><div class="ovr">${p[1]} OVR</div></div>`).join("");
+}
+function renderTeam(){
+  $("team").innerHTML=team.length?team.map((p,i)=>`<div class="team-row"><div class="slot">${i+1}</div><div class="name">${p[0]}<div class="tiny">Random roll slot</div></div><div class="ovr">${p[1]}</div></div>`).join(""):"<div class='tiny' style='margin-top:15px'>No players selected.</div>";
+  $("teamOvr").textContent=team.length===6?`Team OVR: ${fmt(avg(team))}`:"Team OVR: —";
+}
+function rollTeam(){
+  team=[...pool].sort(()=>Math.random()-.5).slice(0,6);
+  round=0;locked=false;renderTeam();renderOpponent();$("log").innerHTML="";$("result").textContent="Team rolled. Face the first opponent!";
+}
+function clearTeam(){team=[];round=0;locked=false;renderTeam();renderOpponent();$("log").innerHTML="";$("result").textContent="Roll your team to begin."}
+function renderOpponent(){
+  if(!team.length){$("opponent").innerHTML="<div class='tiny'>No opponent until your team is rolled.</div>";$("bar").style.width="0%";return}
+  if(round>=opponents.length){$("opponent").innerHTML="<h3 class='win'>🏆 GAUNTLET CLEARED!</h3><div class='sub'>Your team defeated every opponent in order.</div>";$("bar").style.width="100%";$("fight").disabled=true;return}
+  const o=opponents[round],ov=avg(o.players);
+  $("opponent").innerHTML=`<h3>${round+1}. ${o.name} — ${fmt(ov)} OVR</h3>${o.players.map((p,i)=>`<div class="team-row"><div class="slot">${i+1}</div><div class="name">${p[0]}</div><div class="ovr">${p[1]}</div></div>`).join("")}`;
+  $("bar").style.width=(round/opponents.length*100)+"%";$("fight").disabled=false;
+}
+function playMatch(){
+  if(team.length!==6||round>=opponents.length)return;
+  const o=opponents[round], my=avg(team), their=avg(o.players);
+  // Soft OVR advantage + randomness; sigmoid keeps close games exciting.
+  const chance=1/(1+Math.exp(-(my-their)/7));
+  const roll=Math.random(), win=roll<chance, margin=(Math.random()*10-5);
+  const finalMy=my+margin, finalTheir=their+(Math.random()*10-5);
+  const outcome=win?"WIN":"LOSS";
+  $("result").innerHTML=`<b class="${win?"win":"loss"}">${outcome}</b> — ${o.name}<br><span class="tiny">Your OVR ${fmt(my)} vs ${fmt(their)} • win chance ${Math.round(chance*100)}%</span>`;
+  $("log").insertAdjacentHTML("afterbegin",`<div class="logline"><b>Round ${round+1}: ${o.name}</b> — <span class="${win?"win":"loss"}">${outcome}</span> (${fmt(my)} vs ${fmt(their)})</div>`);
+  if(win){round++;renderOpponent(); if(round===opponents.length)$("result").innerHTML+="<br><b class='win'>🏆 You won the Finals!</b>";}
+  else{$("fight").disabled=true;$("result").innerHTML+="<br><span class='tiny'>Gauntlet stopped. Reset or roll a new team to try again.</span>";}
+}
+async function autoRun(){
+  if(team.length!==6)return;
+  while(round<opponents.length && !$("fight").disabled){playMatch();await new Promise(r=>setTimeout(r,500));}
+}
+function resetGame(){location.reload()}
+renderPool();renderTeam();renderOpponent();
+</script>
+</body>
+</html>
